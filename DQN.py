@@ -148,7 +148,7 @@ def main(num_episodes):
     memory = ReplayBuffer(buffer_limit = buffer_limit)
     
     save_interval = 250
-    print_interval = 1
+    print_interval = 50
     score = 0.0
     optimizer = optim.Adam(q.parameters(), lr=learning_rate)
 
@@ -179,7 +179,7 @@ def main(num_episodes):
             
             score += r
             episode_score += r
-            if memory.size() > 10000:
+            if memory.size() > 5000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if done:
                 best_episode_score = max(best_episode_score, episode_score)
