@@ -13,6 +13,7 @@ import torch.nn.functional as F
 import torchvision.transforms as T
 
 from tqdm import tqdm
+# from apex import amp # playing around with mixed-precision training
 import argparse
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,21 +76,25 @@ class ReplayBuffer():
 class Qnet(nn.Module):
     def __init__(self, h, w):
         super(Qnet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
-        self.bn3 = nn.BatchNorm2d(32)
+        self.conv1 = nn.Conv2d(3, 32, kernel_size=8, stride=4)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
+        self.bn3 = nn.BatchNorm2d(64)
         
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
-        def conv2d_size_out(size, kernel_size = 5, stride = 2):
+        def conv2d_size_out(size, kernel_size = 4, stride = 2):
             return (size - (kernel_size - 1) - 1) // stride  + 1
-        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w)))
-        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h)))
-        linear_input_size = convw * convh * 32
-        self.head = nn.Linear(linear_input_size, 2)
+        convw = conv2d_size_out(conv2d_size_out(conv2d_size_out(w, 8, 4), 4, 2), 3, 1)
+        convh = conv2d_size_out(conv2d_size_out(conv2d_size_out(h, 8, 4), 4, 2), 3, 1)
+        linear_input_size = convw * convh * 64
+        self.head = nn.Sequential(
+            nn.Linear(linear_input_size, 512),
+            nn.ReLU(),
+            nn.Linear(512, 2)
+        )
         
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -108,22 +113,24 @@ class Qnet(nn.Module):
 
 
 def train(q, q_target, memory, optimizer, batch_size, gamma):
-    for i in range(10):
-        s,a,r,s_prime,done_mask = memory.sample(batch_size)
-        
-        q_out = q(s)
-        # collect output from the chosen action dimension
-        q_a = q_out.gather(1,a) 
-        
-        # most reward we get in next state s_prime
-        max_q_prime = q_target(s_prime).max(1)[0].unsqueeze(1)
-        target = r + gamma * max_q_prime * done_mask
-        # how much is our policy different from the true target 
-        loss = F.smooth_l1_loss(q_a, target)
-        
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    s,a,r,s_prime,done_mask = memory.sample(batch_size)
+    
+    q_out = q(s)
+    # collect output from the chosen action dimension
+    q_a = q_out.gather(1,a) 
+    
+    # most reward we get in next state s_prime
+    max_q_prime = q_target(s_prime).max(1)[0].unsqueeze(1)
+    target = r + gamma * max_q_prime * done_mask
+    # how much is our policy different from the true target 
+    loss = F.smooth_l1_loss(q_a, target)
+    
+    optimizer.zero_grad()
+
+    #with amp.scale_loss(loss, optimizer) as scaled_loss:
+    	#scaled_loss.backward()
+    loss.backward()
+    optimizer.step()
 
 
 
@@ -141,10 +148,13 @@ def main(num_episodes):
     memory = ReplayBuffer(buffer_limit = buffer_limit)
     
     save_interval = 250
-    print_interval = 50
+    print_interval = 1
     score = 0.0
     optimizer = optim.Adam(q.parameters(), lr=learning_rate)
-    
+
+    #[q, q_target], optimizer = amp.initialize([q, q_target], optimizer, opt_level="O1") #playing around with mixed-precision training
+
+    best_episode_score = -100
     for episode in tqdm(range(1,num_episodes+1)):
         # anneal 8% to 1% over training
         epsilon = max(0.01, 0.08 - 0.01*(episode/200))
@@ -169,15 +179,16 @@ def main(num_episodes):
             
             score += r
             episode_score += r
+            if memory.size() > 10000:
+	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if done:
+                best_episode_score = max(best_episode_score, episode_score)
                 break
-        if memory.size()>2000:
-            train(q, q_target, memory, optimizer, batch_size, gamma)
         
         if episode%print_interval==0 and episode!=0:
             q_target.load_state_dict(q.state_dict())
-            print("n_episode : {}, Average Score : {:.1f}, Episode Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
-                episode, score/episode, episode_score, memory.size(), epsilon*100))
+            print("n_episode : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
+                episode, score/episode, episode_score, best_episode_score, memory.size(), epsilon*100))
             
         if episode%save_interval==0 and episode!=0:
             # save model weights 
@@ -236,12 +247,12 @@ def saveGameVideo(frames):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a DQN Model on Pong-v0')
     parser.add_argument('--episodes', '-e', type=int, default=1000)
-
+    parser.add_argument('--saveVideo', type=str, default=None)
     args = parser.parse_args()
     
-    main(args.episodes)
-    frames = getTrainedGameplay('target_bot_final')
-    saveGameVideo(frames)
-
-
-
+    videoLocation = args.saveVideo
+    if videoLocation:
+        frames = getTrainedGameplay(videoLocation)
+        saveGameVideo(frames)
+    else:
+        main(args.episodes)
