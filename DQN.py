@@ -74,8 +74,9 @@ class ReplayBuffer():
 
 
 class Qnet(nn.Module):
-    def __init__(self, h, w):
+    def __init__(self, h, w, n_actions):
         super(Qnet, self).__init__()
+        self.n_actions = n_actions
         self.conv1 = nn.Conv2d(3, 32, kernel_size=8, stride=4)
         self.bn1 = nn.BatchNorm2d(32)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
@@ -93,7 +94,7 @@ class Qnet(nn.Module):
         self.head = nn.Sequential(
             nn.Linear(linear_input_size, 512),
             nn.ReLU(),
-            nn.Linear(512, 2)
+            nn.Linear(512, n_actions)
         )
         
     def forward(self, x):
@@ -107,7 +108,7 @@ class Qnet(nn.Module):
         out = self.forward(obs) # don't need if random action 
         coin = random.random()
         if coin < epsilon:
-            return random.randint(0,1)
+            return random.randint(0, self.n_actions-1)
         else:
             return out.argmax().item()
 
@@ -134,21 +135,25 @@ def train(q, q_target, memory, optimizer, batch_size, gamma):
 
 
 
-def main(num_episodes):
-    learning_rate = 0.0005
+def main(num_episodes, saved_model = None):
+    learning_rate = 0.0001
     gamma = 0.98
-    buffer_limit = 50000
+    buffer_limit = 100000
     batch_size = 32
 
     env = gym.make('Pong-v0')
     _, _, h, w = get_screen(env).shape
-    q = Qnet(h,w).to(device)
-    q_target = Qnet(h,w).to(device)
+    q = Qnet(h,w,4).to(device)
+
+    if saved_model:
+        q.load_state_dict(torch.load('checkpoints/%s.pt' % saved_model))
+
+    q_target = Qnet(h,w,4).to(device)
     q_target.load_state_dict(q.state_dict())
     memory = ReplayBuffer(buffer_limit = buffer_limit)
     
     save_interval = 250
-    print_interval = 50
+    print_interval = 1
     score = 0.0
     optimizer = optim.Adam(q.parameters(), lr=learning_rate)
 
@@ -168,7 +173,7 @@ def main(num_episodes):
         while not done:
             a = q.sample_action(s, epsilon)
             # first variable would be s_prime but we have get_screen
-            _, r, done, info = env.step(a + 2)
+            _, r, done, info = env.step(a)
             last_s = current_s
             current_s = get_screen(env)
             s_prime = last_s - current_s
@@ -182,9 +187,13 @@ def main(num_episodes):
             if memory.size() > 5000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if done:
-                best_episode_score = max(best_episode_score, episode_score)
                 break
         
+        if episode_score > best_episode_score:
+            best_episode_score = episode_score
+            torch.save(q_target.state_dict(), 'checkpoints/4actions/best_target_bot.pt')
+            torch.save(q.state_dict(), 'checkpoints/4actions/best_policy_bot.pt')
+
         if episode%print_interval==0 and episode!=0:
             q_target.load_state_dict(q.state_dict())
             print("n_episode : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
@@ -192,21 +201,20 @@ def main(num_episodes):
             
         if episode%save_interval==0 and episode!=0:
             # save model weights 
-            torch.save(q_target.state_dict(), 'checkpoints/target_bot_%s.pt' % episode)
-            torch.save(q.state_dict(), 'checkpoints/policy_bot_%s.pt' % episode)
+            torch.save(q_target.state_dict(), 'checkpoints/4actions/target_bot_%s.pt' % episode)
+            torch.save(q.state_dict(), 'checkpoints/4actions/policy_bot_%s.pt' % episode)
     # save final model weights 
-    torch.save(q_target.state_dict(), 'checkpoints/target_bot_final.pt')
-    torch.save(q.state_dict(), 'checkpoints/policy_bot_final.pt')
+    torch.save(q_target.state_dict(), 'checkpoints/4actions/target_bot_final.pt')
+    torch.save(q.state_dict(), 'checkpoints/4actions/policy_bot_final.pt')
 
 # record trained agent gameplay
 def getTrainedGameplay(target_bot):
     env = gym.make('Pong-v0')
+    env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
     _, _, h, w = get_screen(env).shape
-    q = Qnet(h,w).to(device)
+    q = Qnet(h,w,4).to(device)
     q.load_state_dict(torch.load('checkpoints/%s.pt' % target_bot))
     q.eval()
-    frames = []
-
     env.reset()
     current_s = get_screen(env)
     done = False
@@ -215,11 +223,10 @@ def getTrainedGameplay(target_bot):
     s = last_s - current_s
     epsilon = 0.0
     while not done:
-        a = q.sample_action(s, epsilon) + 2
+        a = q.sample_action(s, epsilon)
         
         # use environment's frame instead of preprocessed get_screen(env)
-        next_frame, _, done, info = env.step(a)
-        frames.append(next_frame)
+        _, _, done, info = env.step(a)
         last_s = current_s
         current_s = get_screen(env)
         s_prime = last_s - current_s
@@ -227,21 +234,8 @@ def getTrainedGameplay(target_bot):
         done_mask = 0.0 if done else 1.0
         s = s_prime
         if done:
-            return frames
-
-
-def saveGameVideo(frames):
-    # save game to video 
-    height, width = frames[0].shape[:2] 
-
-    writer = cv2.VideoWriter_fourcc('M','J','P','G')
-    fps = 30
-    video_file = 'playback.avi'
-    out = cv2.VideoWriter(video_file, writer, fps, (width,height))
-    for frame in frames:
-        out.write(frame)
-
-    out.release()
+            break
+    env.close()
 
 
 if __name__ == "__main__":
@@ -250,9 +244,8 @@ if __name__ == "__main__":
     parser.add_argument('--saveVideo', type=str, default=None)
     args = parser.parse_args()
     
-    videoLocation = args.saveVideo
-    if videoLocation:
-        frames = getTrainedGameplay(videoLocation)
-        saveGameVideo(frames)
+    botLocation = args.saveVideo
+    if botLocation:
+        getTrainedGameplay(botLocation)
     else:
-        main(args.episodes)
+        main(args.episodes, saved_model = "4actions/best_target_bot")
