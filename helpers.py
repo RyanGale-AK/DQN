@@ -5,6 +5,7 @@ import numpy as np
 
 from PIL import Image
 
+from models import Qnet
 from settings import device
 
 
