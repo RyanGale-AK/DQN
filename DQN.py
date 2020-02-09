@@ -12,6 +12,8 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
+from wrappers import make_env
+
 from tqdm import tqdm
 # from apex import amp # playing around with mixed-precision training
 import argparse
@@ -141,11 +143,13 @@ def main(num_episodes, saved_model = None):
     buffer_limit = 100000
     batch_size = 32
 
-    env = gym.make('Pong-v0')
+    env = gym.make('PongNoFrameskip-v4')
+    env = make_env(env)
     _, _, h, w = get_screen(env).shape
     q = Qnet(h,w,4).to(device)
 
     if saved_model:
+        print("Loading Model: ", saved_model)
         q.load_state_dict(torch.load('checkpoints/%s.pt' % saved_model))
 
     q_target = Qnet(h,w,4).to(device)
@@ -248,4 +252,4 @@ if __name__ == "__main__":
     if botLocation:
         getTrainedGameplay(botLocation)
     else:
-        main(args.episodes, saved_model = "4actions/best_target_bot")
+        main(args.episodes, saved_model = "4actions/target_bot_4000")
