@@ -1,5 +1,7 @@
 import torch
 import collections
+import random
+
 
 from settings import device
 
