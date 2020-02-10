@@ -96,8 +96,8 @@ def main(num_episodes, saved_model = None, save_models = True):
         
         if episode_score > best_episode_score:
             best_episode_score = episode_score
-            #torch.save(q_target.state_dict(), 'checkpoints/4actions/best_target_bot.pt')
-            #torch.save(q.state_dict(), 'checkpoints/4actions/best_policy_bot.pt')
+            torch.save(q_target.state_dict(), 'checkpoints/4actions/best_target_bot.pt')
+            torch.save(q.state_dict(), 'checkpoints/4actions/best_policy_bot.pt')
 
         if episode%print_interval==0 and episode!=0:
             q_target.load_state_dict(q.state_dict())
@@ -116,7 +116,7 @@ def main(num_episodes, saved_model = None, save_models = True):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train a DQN Model on Pong-v0')
+    parser = argparse.ArgumentParser(description='Train a DQN Model on PongNoFrameskip-v4')
     parser.add_argument('--episodes', '-e', type=int, default=1000)
     parser.add_argument('--saveVideo', type=str, default=None)
     args = parser.parse_args()
@@ -125,4 +125,4 @@ if __name__ == "__main__":
     if botLocation:
         saveTrainedGameplay(botLocation)
     else:
-        main(args.episodes, saved_model = "4actions/target_bot_4000", save_models = False)
+        main(args.episodes, saved_model = "4actions/target_bot_500", save_models = True)
