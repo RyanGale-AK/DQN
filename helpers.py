@@ -20,7 +20,7 @@ def saveTrainedGameplay(target_bot):
     env = make_env(env)
     env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
     q = Qnet(84,84, in_channels = 4, n_actions = 4).to(device)
-    q.load_state_dict(torch.load('checkpoints/%s.pt' % target_bot))
+    q.load_state_dict(torch.load(target_bot))
     q.eval()
     
     # Reset Environment for each game
