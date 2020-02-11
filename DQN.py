@@ -1,5 +1,6 @@
 import gym
 import argparse
+import math
 
 import torch
 import torch.optim as optim
@@ -39,6 +40,8 @@ def train(q, q_target, memory, optimizer, batch_size, gamma):
 
 
 def main(num_episodes, saved_model = None):
+    total_frames = 0
+
     learning_rate = 0.0001
     gamma = 0.98
     buffer_limit = 100000
@@ -68,13 +71,15 @@ def main(num_episodes, saved_model = None):
     best_episode_score = -100
     for episode in tqdm(range(1,num_episodes+1)):
         # anneal 8% to 1% over training
-        epsilon = max(0.01, 0.08 - 0.01*(episode/200))
+        epsilon = 0.02 + (1 - 0.02) * \
+        math.exp(-1. * total_frames / 1e5)
 
         # Reset Environment for each game
         state = get_state(env.reset()).to(device)
         episode_score = 0
         done = False
         while not done:
+            total_frames += 1
             action = q.sample_action(state, epsilon)
             
             obs, reward, done, info = env.step(action)
@@ -82,13 +87,14 @@ def main(num_episodes, saved_model = None):
             next_state = get_state(obs).to(device)
 
             done_mask = 0.0 if done else 1.0
+
             memory.put((state,action,reward/100.,next_state,done_mask))
             
             state = next_state
             
             score += reward
             episode_score += reward
-            if memory.size() > 1000:
+            if memory.size() > 50000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if done:
                 break
@@ -102,7 +108,7 @@ def main(num_episodes, saved_model = None):
             q_target.load_state_dict(q.state_dict())
             print("n_episode : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
                 episode, score/episode, episode_score, best_episode_score, memory.size(), epsilon*100))
-            
+            print("Total Frames: ", total_frames)
         if episode%save_interval==0 and episode!=0:
             # save model weights 
             torch.save(q_target.state_dict(), 'checkpoints/4channel/target_bot_%s.pt' % episode)
