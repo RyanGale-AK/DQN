@@ -63,6 +63,7 @@ def main(num_episodes, saved_model = None):
     
     save_interval = 250
     print_interval = 1
+    update_target_interval = 1000 # every 1000 frames
     score = 0.0
     optimizer = optim.Adam(q.parameters(), lr=learning_rate)
 
@@ -75,27 +76,29 @@ def main(num_episodes, saved_model = None):
         math.exp(-1. * total_frames / 1e5)
 
         # Reset Environment for each game
-        state = get_state(env.reset()).to(device)
+        state = get_state(env.reset())
         episode_score = 0
         done = False
         while not done:
             total_frames += 1
-            action = q.sample_action(state, epsilon)
+            action = q.sample_action(state.to(device), epsilon)
             
             obs, reward, done, info = env.step(action)
 
-            next_state = get_state(obs).to(device)
+            next_state = get_state(obs)
 
             done_mask = 0.0 if done else 1.0
 
-            memory.put((state,action,reward/100.,next_state,done_mask))
+            memory.put((state,action,reward,next_state,done_mask))
             
             state = next_state
             
             score += reward
             episode_score += reward
-            if memory.size() > 50000:
+            if memory.size() > 10000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
+            if total_frames%update_target_interval == 0:
+                q_target.load_state_dict(q.state_dict())
             if done:
                 break
         
@@ -105,7 +108,6 @@ def main(num_episodes, saved_model = None):
             torch.save(q.state_dict(), 'checkpoints/4channel/best_policy_bot.pt')
 
         if episode%print_interval==0 and episode!=0:
-            q_target.load_state_dict(q.state_dict())
             print("n_episode : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
                 episode, score/episode, episode_score, best_episode_score, memory.size(), epsilon*100))
             print("Total Frames: ", total_frames)
@@ -113,6 +115,7 @@ def main(num_episodes, saved_model = None):
             # save model weights 
             torch.save(q_target.state_dict(), 'checkpoints/4channel/target_bot_%s.pt' % episode)
             torch.save(q.state_dict(), 'checkpoints/4channel/policy_bot_%s.pt' % episode)
+
     # save final model weights 
     torch.save(q_target.state_dict(), 'checkpoints/4channel/target_bot_final.pt')
     torch.save(q.state_dict(), 'checkpoints/4channel/policy_bot_final.pt')
@@ -128,4 +131,4 @@ if __name__ == "__main__":
     if botLocation:
         saveTrainedGameplay(botLocation)
     else:
-        main(args.episodes, saved_model = None)
+        main(args.episodes, saved_model = '4channel/best_policy_bot')
