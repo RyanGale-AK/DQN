@@ -9,51 +9,34 @@ from models import Qnet
 from settings import device
 
 
-def get_screen(env):
-    # convert to channel,h,w dimensions
-    resize = T.Compose([T.ToPILImage(),
-                    T.Resize(40, interpolation=Image.CUBIC),
-                    T.ToTensor()])
-    screen = env.render(mode='rgb_array').transpose((2, 0, 1))
-    
-    # erase background
-    screen[screen == 72] = 0 
-    screen[screen == 74] = 0 
-    screen[screen == 144] = 0 
-    screen[screen != 0] = 213
-    screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
-    
-    screen = torch.from_numpy(screen)
-    
-    # convert to batch,channel,h,w dimensions
-    return resize(screen).unsqueeze(0).to(device)
+
+def get_state(obs):
+    state = torch.Tensor(obs)
+    return state.permute((2,0,1)).unsqueeze(0)
 
 # record trained agent gameplay
 def saveTrainedGameplay(target_bot):
     env = gym.make('PongNoFrameskip-v4')
     env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
     _, _, h, w = get_screen(env).shape
-    q = Qnet(h,w, in_channels = 3, n_actions = 4).to(device)
+    q = Qnet(h,w, in_channels = 4, n_actions = 4).to(device)
     q.load_state_dict(torch.load('checkpoints/%s.pt' % target_bot))
     q.eval()
-    env.reset()
-    current_s = get_screen(env)
+    
+    # Reset Environment for each game
+    state = get_state(env.reset()).to(device)
+    episode_score = 0
     done = False
-    last_s = get_screen(env)
-    current_s = get_screen(env)
-    s = last_s - current_s
     epsilon = 0.0
     while not done:
-        a = q.sample_action(s, epsilon)
+        env.render()
+        action = q.sample_action(state, epsilon)
         
-        # use environment's frame instead of preprocessed get_screen(env)
-        _, _, done, info = env.step(a)
-        last_s = current_s
-        current_s = get_screen(env)
-        s_prime = last_s - current_s
+        obs, reward, done, info = env.step(action)
 
-        done_mask = 0.0 if done else 1.0
-        s = s_prime
+        next_state = get_state(obs).to(device)        
+        
+        state = next_state
         if done:
             break
     env.close()

@@ -2,7 +2,6 @@ import torch
 import collections
 import random
 
-
 from settings import device
 
 """
@@ -18,20 +17,20 @@ class ReplayBuffer():
         
     def sample(self, n):
         mini_batch = random.sample(self.buffer, n)
-        s_lst, a_lst, r_lst, s_prime_lst, done_mask_lst = [], [], [], [], []
+        s_lst, a_lst, r_lst, next_state_lst, done_mask_lst = [], [], [], [], []
         
         for transition in mini_batch:
-            s, a, r, s_prime, done_mask = transition
+            s, a, r, next_state, done_mask = transition
             s_lst.append(s)
             a_lst.append([a])
             r_lst.append([r])
-            s_prime_lst.append(s_prime)
+            next_state_lst.append(next_state)
             done_mask_lst.append([done_mask])
             
         return  torch.cat(s_lst).to(device), \
                 torch.tensor(a_lst).to(device), \
                 torch.tensor(r_lst).to(device), \
-                torch.cat(s_prime_lst).to(device), \
+                torch.cat(next_state_lst).to(device), \
                 torch.tensor(done_mask_lst).to(device)
     
     def size(self):

@@ -12,7 +12,7 @@ from tqdm import tqdm
 from models import Qnet
 from wrappers import make_env
 from memory import ReplayBuffer
-from helpers import saveTrainedGameplay, get_screen
+from helpers import saveTrainedGameplay, get_state
 from settings import device
 
 
@@ -38,7 +38,7 @@ def train(q, q_target, memory, optimizer, batch_size, gamma):
 
 
 
-def main(num_episodes, saved_model = None, save_models = True):
+def main(num_episodes, saved_model = None):
     learning_rate = 0.0001
     gamma = 0.98
     buffer_limit = 100000
@@ -46,14 +46,15 @@ def main(num_episodes, saved_model = None, save_models = True):
 
     env = gym.make('PongNoFrameskip-v4')
     env = make_env(env)
-    _, _, h, w = get_screen(env).shape
-    q = Qnet(h,w, in_channels = 3, n_actions = 4).to(device)
+    h, w = 84, 84
+    #_, _, h, w = get_screen(env).shape
+    q = Qnet(h,w, in_channels = 4, n_actions = 4).to(device)
 
     if saved_model:
         print("Loading Model: ", saved_model)
         q.load_state_dict(torch.load('checkpoints/%s.pt' % saved_model))
 
-    q_target = Qnet(h,w, in_channels = 3, n_actions = 4).to(device)
+    q_target = Qnet(h,w, in_channels = 4, n_actions = 4).to(device)
     q_target.load_state_dict(q.state_dict())
     memory = ReplayBuffer(buffer_limit = buffer_limit)
     
@@ -68,36 +69,34 @@ def main(num_episodes, saved_model = None, save_models = True):
     for episode in tqdm(range(1,num_episodes+1)):
         # anneal 8% to 1% over training
         epsilon = max(0.01, 0.08 - 0.01*(episode/200))
-        env.reset()
-        current_s = get_screen(env)
-        done = False
-        last_s = get_screen(env)
-        current_s = get_screen(env)
-        s = last_s - current_s
+
+        # Reset Environment for each game
+        state = get_state(env.reset()).to(device)
         episode_score = 0
+        done = False
         while not done:
-            a = q.sample_action(s, epsilon)
-            # first variable would be s_prime but we have get_screen
-            _, r, done, info = env.step(a)
-            last_s = current_s
-            current_s = get_screen(env)
-            s_prime = last_s - current_s
+            action = q.sample_action(state, epsilon)
             
+            obs, reward, done, info = env.step(action)
+
+            next_state = get_state(obs).to(device)
+
             done_mask = 0.0 if done else 1.0
-            memory.put((s,a,r/100.,s_prime,done_mask))
-            s = s_prime
+            memory.put((state,action,reward/100.,next_state,done_mask))
             
-            score += r
-            episode_score += r
-            if memory.size() > 5000:
+            state = next_state
+            
+            score += reward
+            episode_score += reward
+            if memory.size() > 1000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if done:
                 break
         
         if episode_score > best_episode_score:
             best_episode_score = episode_score
-            torch.save(q_target.state_dict(), 'checkpoints/4actions/best_target_bot.pt')
-            torch.save(q.state_dict(), 'checkpoints/4actions/best_policy_bot.pt')
+            torch.save(q_target.state_dict(), 'checkpoints/4channel/best_target_bot.pt')
+            torch.save(q.state_dict(), 'checkpoints/4channel/best_policy_bot.pt')
 
         if episode%print_interval==0 and episode!=0:
             q_target.load_state_dict(q.state_dict())
@@ -106,13 +105,11 @@ def main(num_episodes, saved_model = None, save_models = True):
             
         if episode%save_interval==0 and episode!=0:
             # save model weights 
-            torch.save(q_target.state_dict(), 'checkpoints/4actions/target_bot_%s.pt' % episode)
-            torch.save(q.state_dict(), 'checkpoints/4actions/policy_bot_%s.pt' % episode)
+            torch.save(q_target.state_dict(), 'checkpoints/4channel/target_bot_%s.pt' % episode)
+            torch.save(q.state_dict(), 'checkpoints/4channel/policy_bot_%s.pt' % episode)
     # save final model weights 
-    torch.save(q_target.state_dict(), 'checkpoints/4actions/target_bot_final.pt')
-    torch.save(q.state_dict(), 'checkpoints/4actions/policy_bot_final.pt')
-
-
+    torch.save(q_target.state_dict(), 'checkpoints/4channel/target_bot_final.pt')
+    torch.save(q.state_dict(), 'checkpoints/4channel/policy_bot_final.pt')
 
 
 if __name__ == "__main__":
@@ -125,4 +122,4 @@ if __name__ == "__main__":
     if botLocation:
         saveTrainedGameplay(botLocation)
     else:
-        main(args.episodes, saved_model = "4actions/target_bot_500", save_models = True)
+        main(args.episodes, saved_model = None)
