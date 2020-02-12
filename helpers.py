@@ -7,7 +7,6 @@ from PIL import Image
 
 from models import Qnet
 from settings import device
-from wrappers import make_env
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -16,9 +15,7 @@ def get_state(obs):
     return state.permute((2,0,1)).unsqueeze(0)
 
 # record trained agent gameplay
-def saveTrainedGameplay(target_bot):
-    env = gym.make('PongNoFrameskip-v4')
-    env = make_env(env)
+def saveTrainedGameplay(env, target_bot):
     env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
     q = Qnet(84,84, in_channels = 4, n_actions = 4).to(device)
     q.load_state_dict(torch.load(target_bot,map_location=device))
