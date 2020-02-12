@@ -6,7 +6,7 @@
 
 #import torch
 #import torch.optim as optim
-#import torch.nn.functional as F
+import torch.nn.functional as F
 
 #from tqdm import tqdm
 # from apex import amp # playing around with mixed-precision training

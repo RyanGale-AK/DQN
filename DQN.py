@@ -79,6 +79,7 @@ class DQN():
         self.optimizer.step()
 
     def run(self, num_episodes):
+        self.beginLogging()
         #watcher = tw.Watcher()
         env = self.env
         best_episode_score = float('-Inf')
@@ -121,8 +122,11 @@ class DQN():
 
             best_episode_score = max(best_episode_score, episode_score)
             # Print updates every episode
-            print("n_episode : {}, Total Frames : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
-                episode, total_frames, score/episode, episode_score, best_episode_score, self.memory.size(), epsilon*100))
+            out = "n_episode : {}, Total Frames : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
+                episode, total_frames, score/episode, episode_score, best_episode_score, self.memory.size(), epsilon*100)
+            print(out)
+            self.log(out)
+            
 
             # Microsoft Tensorwatch Watcher for Visualizing Training
             #watcher.observe(
@@ -137,25 +141,10 @@ class DQN():
         # save final model weights
         torch.save(self.q.state_dict(), os.path.join(self.save_location, 'policy_final.pt'))
 
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Train a DQN Model on PongNoFrameskip-v4')
-    parser.add_argument('--episodes', '-e', type=int, default=1000)
-    parser.add_argument('--loadModel', '-l', type=str, default=None)
-    parser.add_argument('--start_episode', type=int, default=1)
-    parser.add_argument('--saveLoc', '-s', type=str, default=None)
-    parser.add_argument('--saveVideo', type=str, default=None)
-    args = parser.parse_args()
-
-    env = gym.make('PongNoFrameskip-v4')
-    env = make_env(env)
-
-    botLocation = args.saveVideo
-    if botLocation is not None:
-        saveTrainedGameplay(env, botLocation)
-    else:
-        if args.saveLoc is None:
-            main(env, args.episodes, episode_start = args.start_episode, saved_model = args.loadModel)
-        else:
-            main(env, args.episodes, episode_start = args.start_episode, saved_model = args.loadModel, save_loc = args.saveLoc)
+    def beginLogging(self):
+        with open(os.path.join(self.save_location, 'log.out'), 'w') as f:
+            f.write('')
+    
+    def log(self, out):
+        with open(os.path.join(self.save_location, 'log.out'), 'a') as f:
+                        f.write('%s\n'%out)
