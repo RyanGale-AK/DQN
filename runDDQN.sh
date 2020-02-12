@@ -1,1 +1,1 @@
-python -u DDQN.py --episodes $1 --saveLoc $2  > ./log/ddqn.out 2> ./log/ddqn.err &
+python -u main.py --episodes $1 --model DDQN  > ./log/ddqn.out 2> ./log/ddqn.err &
