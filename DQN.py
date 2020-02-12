@@ -21,17 +21,17 @@ from settings import device
 
 def train(q, q_target, memory, optimizer, batch_size, gamma):
     s,a,r,s_prime,done_mask = memory.sample(batch_size)
-    
+
     q_out = q(s)
     # collect output from the chosen action dimension
-    q_a = q_out.gather(1,a) 
-    
+    q_a = q_out.gather(1,a)
+
     # most reward we get in next state s_prime
     max_q_prime = q_target(s_prime).max(1)[0].unsqueeze(1)
     target = r + gamma * max_q_prime * done_mask
-    # how much is our policy different from the true target 
+    # how much is our policy different from the true target
     loss = F.smooth_l1_loss(q_a, target)
-    
+
     optimizer.zero_grad()
 
     #with amp.scale_loss(loss, optimizer) as scaled_loss: # playing around with mixed-precision training
@@ -44,7 +44,7 @@ def train(q, q_target, memory, optimizer, batch_size, gamma):
 def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkpoints/tmp/'):
     watcher = tw.Watcher()
 
-    # Model parameters 
+    # Model parameters
     learning_rate = 1e-4 # 0.0001 matches paper
     gamma = 0.98
     buffer_limit = 10 ** 5 # paper uses 1M last frames, but this is expensive, so we try 10x less
@@ -54,7 +54,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
     eps_start = 1
     eps_end = 0.01
     decay_factor = 10 ** 5
-    
+
     epsilon_decay = lambda x: eps_end + (eps_start - eps_end) * \
         math.exp(-1. * x / decay_factor)
 
@@ -82,7 +82,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
     print_interval = 1
     update_target_interval = 1000 # every 1000 frames
     score = 0.0
-    
+
 
     #[q, q_target], optimizer = amp.initialize([q, q_target], optimizer, opt_level="O1") #playing around with mixed-precision training
     total_frames = 0
@@ -98,7 +98,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
         while not done:
             total_frames += 1
             action = q.sample_action(state.to(device), epsilon)
-            
+
             obs, reward, done, info = env.step(action)
 
             next_state = get_state(obs)
@@ -106,9 +106,9 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
             done_mask = 0.0 if done else 1.0
 
             memory.put((state,action,reward,next_state,done_mask))
-            
+
             state = next_state
-            
+
             score += reward
             episode_score += reward
 
@@ -118,7 +118,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
                 q_target.load_state_dict(q.state_dict())
             if done:
                 break
-        
+
         if episode_score > best_episode_score:
             best_episode_score = episode_score
             torch.save(q_target.state_dict(), os.path.join(save_loc, 'best_target_bot.pt'))
@@ -127,9 +127,9 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
         if episode%print_interval==0 and episode!=0:
             print("n_episode : {}, Total Frames : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
                 episode, total_frames, score/episode, episode_score, best_episode_score, memory.size(), epsilon*100))
-        
+
         if episode%save_interval==0 and episode!=0:
-            # save model weights 
+            # save model weights
             torch.save(q_target.state_dict(), os.path.join(save_loc, 'target_bot_%s.pt' % episode))
             torch.save(q.state_dict(), os.path.join(save_loc, 'policy_bot_%s.pt' % episode))
 
@@ -143,7 +143,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
             frames = total_frames,
         )
 
-    # save final model weights 
+    # save final model weights
     torch.save(q_target.state_dict(), os.path.join(save_loc, 'target_bot_final.pt'))
     torch.save(q.state_dict(), os.path.join(save_loc, 'policy_bot_final.pt'))
 
@@ -156,7 +156,7 @@ if __name__ == "__main__":
     parser.add_argument('--saveLoc', '-s', type=str, default=None)
     parser.add_argument('--saveVideo', type=str, default=None)
     args = parser.parse_args()
-    
+
     botLocation = args.saveVideo
     if botLocation is not None:
         saveTrainedGameplay(botLocation)
@@ -165,4 +165,3 @@ if __name__ == "__main__":
             main(args.episodes, episode_start = args.start_episode, saved_model = args.loadModel)
         else:
             main(args.episodes, episode_start = args.start_episode, saved_model = args.loadModel, saveLoc = args.saveLoc)
-  
