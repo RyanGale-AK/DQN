@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from tqdm import tqdm
-# from apex import amp # playing around with mixed-precision training
+#from apex import amp # playing around with mixed-precision training
 
 # Local Imports
 from models import Qnet
@@ -56,6 +56,8 @@ class DQN():
         self.save_interval = 100000
         self.update_target_interval = 10000
 
+        #[self.q, self.q_target], self.optimizer = amp.initialize([self.q, self.q_target], self.optimizer, opt_level="O1") #playing around with mixed-precision training
+
 
     def train(self):
         s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)
@@ -73,8 +75,8 @@ class DQN():
 
         self.optimizer.zero_grad()
 
-        #with amp.scale_loss(loss, optimizer) as scaled_loss: # playing around with mixed-precision training
-        	#scaled_loss.backward()
+        #with amp.scale_loss(loss, self.optimizer) as scaled_loss: # playing around with mixed-precision training
+        #	scaled_loss.backward()
         loss.backward()
         self.optimizer.step()
 
@@ -113,7 +115,7 @@ class DQN():
                 if total_frames%self.update_target_interval == 0:
                     self.q_target.load_state_dict(self.q.state_dict())
                 # Save policy weights
-                if episode%self.save_interval==0:
+                if total_frames%self.save_interval==0:
                     torch.save(self.q.state_dict(), os.path.join(self.save_location, 'policy_%s.pt' % episode))
                 # Reset environment for the next game
                 if done:
