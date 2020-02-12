@@ -18,7 +18,12 @@ from memory import ReplayBuffer
 from helpers import saveTrainedGameplay, get_state
 from settings import device
 
-
+'''
+    Optimizes our training policy by computing the Huber Loss between our minibatch of samples and the maximum possible reward for the next state(s)
+    Huber Loss here is defined as:
+    loss(x,y) = \frac{1}{n}\sum{z_i}, where z_i = 0.5(x_i-y_i)^2; if |x_i - y_i| < 1 or 
+                                                = |x_i - y_i| - 0.5; otherwise
+'''
 def train(q, q_target, memory, optimizer, batch_size, gamma):
     s,a,r,s_prime,done_mask = memory.sample(batch_size)
     
@@ -29,6 +34,7 @@ def train(q, q_target, memory, optimizer, batch_size, gamma):
     # most reward we get in next state s_prime
     max_q_prime = q_target(s_prime).max(1)[0].unsqueeze(1)
     target = r + gamma * max_q_prime * done_mask
+
     # how much is our policy different from the true target 
     loss = F.smooth_l1_loss(q_a, target)
     
@@ -47,7 +53,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
     # Model parameters 
     learning_rate = 1e-4 # 0.0001 matches paper
     gamma = 0.98
-    buffer_limit = 10 ** 5 # paper uses 1M last frames, but this is expensive, so we try 10x less
+    buffer_limit = 100000 # paper uses 1M last frames, but this is expensive, so we try 2x less
     batch_size = 32
 
     # Epsilon Decay Parameters
@@ -80,7 +86,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
 
     save_interval = 250
     print_interval = 1
-    update_target_interval = 1000 # every 1000 frames
+    update_target_interval = 10000 # every 10000 frames
     score = 0.0
     
 
@@ -104,7 +110,6 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
             next_state = get_state(obs)
 
             done_mask = 0.0 if done else 1.0
-
             memory.put((state,action,reward,next_state,done_mask))
             
             state = next_state
@@ -112,7 +117,7 @@ def main(num_episodes, episode_start = 1, saved_model = None, save_loc = 'checkp
             score += reward
             episode_score += reward
 
-            if memory.size() > 10000:
+            if memory.size() > 20000:
 	            train(q, q_target, memory, optimizer, batch_size, gamma)
             if total_frames%update_target_interval == 0:
                 q_target.load_state_dict(q.state_dict())
@@ -164,5 +169,5 @@ if __name__ == "__main__":
         if args.saveLoc is None:
             main(args.episodes, episode_start = args.start_episode, saved_model = args.loadModel)
         else:
-            main(args.episodes, episode_start = args.start_episode, saved_model = args.loadModel, saveLoc = args.saveLoc)
+            main(args.episodes, episode_start = args.start_episode, saved_model = args.loadModel, save_loc = args.saveLoc)
   

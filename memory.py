@@ -35,3 +35,7 @@ class ReplayBuffer():
     
     def size(self):
         return len(self.buffer)
+
+class ExperiencedReplayBuffer(ReplayBuffer):
+    def __init__(self, buffer_limit):
+        super().__init__(self, buffer_limit)
