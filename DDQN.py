@@ -31,7 +31,7 @@ from DQN import DQN
 class DDQN(DQN):
     def __init__(self, env, save_location, start_episode = 1, saved_model = None):
         super().__init__(env, save_location, start_episode, saved_model)
-        self.buffer_limit = 10 ** 5 * 2
+        #self.buffer_limit = 10 ** 5 * 2
 
     def train(self):
         s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)

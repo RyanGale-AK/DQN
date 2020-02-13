@@ -11,7 +11,7 @@ from settings import device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def get_state(obs):
-    state = torch.Tensor(obs)
+    state = torch.ByteTensor(obs)
     return state.permute((2,0,1)).unsqueeze(0)
 
 # record trained agent gameplay

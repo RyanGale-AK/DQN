@@ -25,19 +25,12 @@ if __name__ == "__main__":
     env = make_env(env)
     default_save_location = 'checkpoints/%s/%s/' % (args.env, args.model)
     save_location = args.saveDirectory if args.saveDirectory else default_save_location
-
-    if not os.path.exists(os.path.dirname(save_location)):
-        try:
-            os.makedirs(os.path.dirname(save_location))
-        except OSError as exc: # Guard against race condition
-            if exc.errno != errno.EEXIST:
-                raise
                 
     if args.saveVideo:
         saveTrainedGameplay(env, args.saveVideo)
     else:
         if args.model == "DQN":
-            model = DQN(env, save_location, args.start_episode, args.saveDirectory)
+            model = DQN(env, save_location, args.start_episode, args.loadModel)
         elif args.model == "DDQN":
-            model = DDQN(env, save_location, args.start_episode, args.saveDirectory)
+            model = DDQN(env, save_location, args.start_episode, args.loadModel)
         model.run(args.episodes)
