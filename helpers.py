@@ -5,7 +5,7 @@ import numpy as np
 
 from PIL import Image
 
-from models import Qnet
+from models import Qnet, DuelingQnet
 from settings import device
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -16,7 +16,8 @@ def get_state(obs):
 
 # record trained agent gameplay
 def saveTrainedGameplay(env, target_bot):
-    env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
+    game = env.unwrapped.game
+    env = gym.wrappers.Monitor(env, './videos/' + game, force=True)
     q = Qnet(84,84, in_channels = 4, n_actions = env.action_space.n).to(device)
     q.load_state_dict(torch.load(target_bot,map_location=device))
     q.eval()
