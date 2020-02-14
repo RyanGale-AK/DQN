@@ -17,6 +17,7 @@ from torch.nn.utils import clip_grad_norm_
 #from memory import ReplayBuffer
 #from helpers import saveTrainedGameplay, get_state
 #from settings import device
+from settings import *
 
 from DDQN import DDQN
 from models import DuelingQnet
@@ -30,13 +31,21 @@ from models import DuelingQnet
     Y_t = R_{t+1} + \gamma * Q(S_{t+1},argmax Q(S_{t+1},a;theta_t);\theta_t^-)
 '''
 class DuelingDDQN(DDQN):
-    def __init__(self, env, save_location, start_episode = 1, saved_model = None):
-        super().__init__(env, save_location, start_episode, saved_model)
+    def __init__(self, env, save_location, start_episode = 1, saved_model = None, prioritized_replay = False):
+        super().__init__(env, save_location, start_episode, saved_model, prioritized_replay)
         self.q = DuelingQnet(84,84, in_channels = 4, n_actions = self.num_actions).to(self.device)
         self.q_target = DuelingQnet(84,84, in_channels = 4, n_actions = self.num_actions).to(self.device)
 
     def train(self):
+        
         s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)
+
+        s = torch.Tensor(s).to(device)
+        a = torch.LongTensor(a).to(device)
+        r = torch.Tensor(r).to(device)
+        s_prime = torch.Tensor(s_prime).to(device)
+        done_mask = torch.Tensor(done_mask).to(device)
+
         # Q_out is the observed transitions given the current network
         q_out = self.q(s)
         # collect output from the chosen action dimension

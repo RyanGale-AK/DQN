@@ -2,7 +2,7 @@ import random
 import torch.nn as nn
 import torch.nn.functional as F
 
-from settings import device
+from settings import *
 
 class Qnet(nn.Module):
     def __init__(self, h, w, in_channels = 3, n_actions = 4):
@@ -36,13 +36,12 @@ class Qnet(nn.Module):
         return self.head(x.view(x.size(0), -1))
     
     # action is either random or max probability estimated by Qnet
-    def sample_action(self, obs, epsilon):
-        out = self.forward(obs) # don't need if random action 
+    def sample_action(self, obs, epsilon): 
         coin = random.random()
         if coin < epsilon:
             return random.randint(0, self.n_actions-1)
         else:
-            return out.argmax().item()
+            return self.forward(obs).argmax().item() # don't need if random action
 
 
 class DuelingQnet(Qnet):

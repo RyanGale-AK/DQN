@@ -3,6 +3,7 @@ import argparse
 import math
 import os
 import tensorwatch as tw
+import numpy as np
 
 import torch
 import torch.optim as optim
@@ -14,9 +15,9 @@ from tqdm import tqdm
 # Local Imports
 from models import Qnet
 from wrappers import make_env
-from memory import ReplayBuffer
+from memory import ReplayBuffer, PrioritizedReplayBuffer
 from helpers import saveTrainedGameplay, get_state
-from settings import device
+from settings import *
 
 '''
     Optimizes our training policy by computing the Huber Loss between our minibatch of samples and the maximum possible reward for the next state(s)
@@ -25,45 +26,55 @@ from settings import device
                                                 = |x_i - y_i| - 0.5; otherwise
 '''
 class DQN():
-    def __init__(self, env, save_location, start_episode = 1, saved_model = None):
+    def __init__(self, env, save_location, start_episode = 1, saved_model = None, prioritized_replay = False):
         self.env = env
         self.num_actions = env.action_space.n
         self.start_episode = start_episode
         self.save_location = save_location
+        self.saved_model = saved_model
+        self.prioritized_replay = prioritized_replay
+        self.alpha = 0.6
+        self.beta = 0
 
         self.learning_rate = 1e-4
         self.gamma = 0.98
         self.buffer_limit = 10 ** 5
-        self.training_frame_start = 10000
+        self.training_frame_start = 10000 * 5
         self.batch_size = 32
 
         self.eps_start = 1
         self.eps_end = 0.01
         self.decay_factor = 10 ** 5
-        
-        self.q = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
-        self.q_target = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
-        self.memory = ReplayBuffer(buffer_limit = self.buffer_limit)
+
+        if prioritized_replay:
+            self.memory = PrioritizedReplayBuffer(size = self.buffer_limit, alpha = self.alpha)
+            self.prioritized_replay_eps = 1e-5
+        else:
+            self.memory = ReplayBuffer(size = self.buffer_limit)
 
         if saved_model:
             self.epsilon_decay = lambda x: self.eps_end
-            self.q.load_state_dict(torch.load(saved_model)) # Load pretrained model
         else:
             self.epsilon_decay = lambda x: self.eps_end + (self.eps_start - self.eps_end) * math.exp(-1. * x / self.decay_factor)
-        
-        self.q_target.load_state_dict(self.q.state_dict()) # Load policy weights into target network
-        self.optimizer = optim.Adam(self.q.parameters(), lr=self.learning_rate)
 
         self.save_interval = 100000
         self.update_target_interval = 10000
 
         self.device = device
 
-        #[self.q, self.q_target], self.optimizer = amp.initialize([self.q, self.q_target], self.optimizer, opt_level="O1") #playing around with mixed-precision training
+        self.q = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
+        self.q_target = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
 
+        #[self.q, self.q_target], self.optimizer = amp.initialize([self.q, self.q_target], self.optimizer, opt_level="O1") #playing around with mixed-precision training
 
     def train(self):
         s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)
+        
+        s = torch.Tensor(s).to(device)
+        a = torch.LongTensor(a).to(device)
+        r = torch.Tensor(r).to(device)
+        s_prime = torch.Tensor(s_prime).to(device)
+        done_mask = torch.Tensor(done_mask).to(device)
 
         q_out = self.q(s)
         # collect output from the chosen action dimension
@@ -84,6 +95,12 @@ class DQN():
         self.optimizer.step()
 
     def run(self, num_episodes):
+        self.q_target.load_state_dict(self.q.state_dict()) # Load policy weights into target network
+        self.optimizer = optim.Adam(self.q.parameters(), lr=self.learning_rate)
+
+        if self.saved_model:
+            self.q.load_state_dict(torch.load(saved_model)) # Load pretrained model
+
         self.beginLogging()
         #watcher = tw.Watcher()
         env = self.env
@@ -97,7 +114,7 @@ class DQN():
             episode_score = 0
             done = False
             while not done:
-                action = self.q.sample_action(state.to(device), epsilon)
+                action = self.q.sample_action(torch.Tensor(state).unsqueeze(0).to(device), epsilon)
 
                 obs, reward, done, info = env.step(action)
 
@@ -128,7 +145,7 @@ class DQN():
             best_episode_score = max(best_episode_score, episode_score)
             # Print updates every episode
             out = "n_episode : {}, Total Frames : {}, Average Score : {:.1f}, Episode Score : {:.1f}, Best Score : {:.1f}, n_buffer : {}, eps : {:.1f}%".format(
-                episode, total_frames, score/episode, episode_score, best_episode_score, self.memory.size(), epsilon*100)
+                episode, total_frames, score/episode, episode_score, best_episode_score, len(self.memory), epsilon*100)
             print(out)
             self.log(out)
             
