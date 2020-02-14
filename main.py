@@ -5,6 +5,7 @@ from wrappers import make_env
 from helpers import saveTrainedGameplay
 from DQN import DQN
 from DDQN import DDQN
+from DuelingDDQN import DuelingDDQN
 
 
 # example usage:
@@ -33,4 +34,6 @@ if __name__ == "__main__":
             model = DQN(env, save_location, args.start_episode, args.loadModel)
         elif args.model == "DDQN":
             model = DDQN(env, save_location, args.start_episode, args.loadModel)
+        elif args.model == "DuelingDDQN":
+            model = DuelingDDQN(env, save_location, args.start_episode, args.loadModel)
         model.run(args.episodes)
