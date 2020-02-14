@@ -27,6 +27,7 @@ from settings import device
 class DQN():
     def __init__(self, env, save_location, start_episode = 1, saved_model = None):
         self.env = env
+        self.num_actions = env.action_space.n
         self.start_episode = start_episode
         self.save_location = save_location
 
@@ -40,8 +41,8 @@ class DQN():
         self.eps_end = 0.01
         self.decay_factor = 10 ** 5
         
-        self.q = Qnet(84,84, in_channels = 4, n_actions = 4).to(device)
-        self.q_target = Qnet(84,84, in_channels = 4, n_actions = 4).to(device)
+        self.q = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
+        self.q_target = Qnet(84,84, in_channels = 4, n_actions = self.num_actions).to(device)
         self.memory = ReplayBuffer(buffer_limit = self.buffer_limit)
 
         if saved_model:
@@ -55,6 +56,8 @@ class DQN():
 
         self.save_interval = 100000
         self.update_target_interval = 10000
+
+        self.device = device
 
         #[self.q, self.q_target], self.optimizer = amp.initialize([self.q, self.q_target], self.optimizer, opt_level="O1") #playing around with mixed-precision training
 

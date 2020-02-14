@@ -1,1 +1,1 @@
-python -u main.py --episodes $1 --model DQN  > ./log/dqn.out 2> ./log/dqn.err &
+python -u main.py --episodes $1 --model DQN --env $2  > ./log/dqn$2.out 2> ./log/dqn$2.err &

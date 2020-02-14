@@ -17,7 +17,7 @@ def get_state(obs):
 # record trained agent gameplay
 def saveTrainedGameplay(env, target_bot):
     env = gym.wrappers.Monitor(env, './videos/dqn_pong_video', force=True)
-    q = Qnet(84,84, in_channels = 4, n_actions = 4).to(device)
+    q = Qnet(84,84, in_channels = 4, n_actions = env.action_space.n).to(device)
     q.load_state_dict(torch.load(target_bot,map_location=device))
     q.eval()
 
