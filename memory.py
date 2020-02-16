@@ -19,10 +19,10 @@ class ReplayBuffer():
         return len(self.buffer)
 
     def put(self, transition):
-        if self.next_idx < self.maxsize:
+        if self.next_idx >= len(self.buffer):
             self.buffer.append(transition)
         else:
-            self.buffer[next_idx] = transition
+            self.buffer[self.next_idx] = transition
         self.next_idx = (self.next_idx + 1) % self.maxsize
     
     def _encode_sample(self, idxes):
