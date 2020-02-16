@@ -32,7 +32,7 @@ class DDQN(DQN):
     def __init__(self, env, save_location, start_episode = 1, saved_model = None, prioritized_replay = False):
         super().__init__(env, save_location, start_episode, saved_model, prioritized_replay)
         #self.buffer_limit = 10 ** 5 * 2
-        #self.training_frame_start = 1000
+        #self.training_frame_start = 1e10
         self.beta = 0.4
 
     def train(self):
@@ -41,11 +41,11 @@ class DDQN(DQN):
             weights = torch.Tensor(weights).to(device)
         else:
             s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)
-        s = torch.Tensor(s).to(device)
+        s = torch.as_tensor(s).to(device)
         a = torch.LongTensor(a).to(device)
-        r = torch.Tensor(r).to(device)
-        s_prime = torch.Tensor(s_prime).to(device)
-        done_mask = torch.Tensor(done_mask).to(device)
+        r = torch.as_tensor(r).to(device)
+        s_prime = torch.as_tensor(s_prime).to(device)
+        done_mask = torch.as_tensor(done_mask).to(device)
 
 
         # Q_out is the observed transitions given the current network

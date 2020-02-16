@@ -70,11 +70,11 @@ class DQN():
     def train(self):
         s,a,r,s_prime,done_mask = self.memory.sample(self.batch_size)
         
-        s = torch.Tensor(s).to(device)
+        s = torch.as_tensor(s).to(device)
         a = torch.LongTensor(a).to(device)
-        r = torch.Tensor(r).to(device)
-        s_prime = torch.Tensor(s_prime).to(device)
-        done_mask = torch.Tensor(done_mask).to(device)
+        r = torch.as_tensor(r).to(device)
+        s_prime = torch.as_tensor(s_prime).to(device)
+        done_mask = torch.as_tensor(done_mask).to(device)
 
         q_out = self.q(s)
         # collect output from the chosen action dimension
@@ -122,7 +122,6 @@ class DQN():
 
                 done_mask = 0.0 if done else 1.0
                 self.memory.put((state,action,reward,next_state,done_mask))
-
                 state = next_state
 
                 score += reward
